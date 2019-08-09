@@ -1,0 +1,119 @@
+-- Please run this on http://sqlfiddle.com/
+
+-- SCHEMA
+-- We create the table for Clicks, containing eventid and cpc
+CREATE TABLE IF NOT EXISTS `Clicks` (
+  `eventid` int unsigned NOT NULL,
+  `cpc` int unsigned NOT NULL
+); 
+-- We insert some mock-up data (and assume eventid is unique)
+INSERT INTO `Clicks` (`eventid`, `cpc`) VALUES
+  ('0', '5'),
+  ('1', '2'),
+  ('2', '3'),
+  ('3', '1'),
+  ('4', '12'),
+  ('5', '7');
+
+-- We create the table for Impressions, containing eventid, userid and testgroup
+CREATE TABLE IF NOT EXISTS `Impressions` (
+  `eventid` int unsigned NOT NULL,
+  `userid` int unsigned NOT NULL,
+  `testgroup` char(1) 
+);
+
+/* 
+We insert some mock-up data
+We also assume a user can be in multiple testgroups (see rows with userid = 3)
+We assume there can be more impressions than clicks
+*/
+INSERT INTO `Impressions` (`eventid`, `userid`, `testgroup`) VALUES
+('0', '1', 'A'),
+('1', '1', 'A'),
+('2', '2', 'B'),
+('3', '2', 'B'),
+('4', '3', 'A'),
+('5', '3', 'B'),
+('6', '2', 'B'),
+('8', '4', 'A'),
+('9', '3', 'A'),
+('10', '4', 'A'),
+('11', '5', 'B'),
+('12', '6', 'A'),
+('13', '6', 'B');
+
+---------------------------
+
+-- QUERIES
+/*
+We output the Click-Through Rate (CTR) per user of each test group (‘A’ and ‘B’)
+We assume that CTR is defined as total number of clicks divided by the total number of impressions of each user in each testgroup
+*/
+SELECT Impressions.userid, Impressions.testgroup
+, SUM(CASE WHEN Impressions.eventid = Clicks.eventid THEN 1 ELSE 0 END) AS user_clicks_pergroup
+, SUM(CASE WHEN userid THEN 1 ELSE 0 END) AS user_impressions_pergroup
+, SUM(CASE WHEN Impressions.eventid = Clicks.eventid THEN 1 ELSE 0 END) 
+/ SUM(CASE WHEN userid THEN 1 ELSE 0 END) AS user_CTR_pergroup
+FROM Impressions
+LEFT JOIN Clicks ON Impressions.eventid=Clicks.eventid
+GROUP BY userid, testgroup;
+
+/*
+We output the average Revenue per user of each test group (‘A’ and ‘B’)
+Revenue was not defined in the exercise, so we assume the total revenue is equal to the total cpc
+We assume average revenue (per user of each test group) is equal to the total cpc (per user of each test group) divided by number of impressions (per user of each test group)
+*/
+SELECT userid, testgroup, IFNULL(SUM(cpc) / SUM(CASE WHEN Impressions.userid THEN 1 ELSE 0 END), 0) AS user_avg_cpc_pergroup
+FROM Impressions 
+LEFT JOIN Clicks ON Impressions.eventid=Clicks.eventid
+GROUP BY userid, testgroup;
+
+
+-- Some extra calculations I made, somewhat showing my step-by-step process and resulting in extra insights
+
+-- Click-Through Rate
+-- Output of our total number of clicks and impressions and calculation of CTR 
+SELECT SUM(CASE WHEN Impressions.eventid = Clicks.eventid THEN 1 ELSE 0 END) AS clicks_total
+, SUM(CASE WHEN userid THEN 1 ELSE 0 END) AS impressions_total
+, SUM(CASE WHEN Impressions.eventid = Clicks.eventid THEN 1 ELSE 0 END) 
+/ SUM(CASE WHEN userid THEN 1 ELSE 0 END) AS CTR_total
+FROM Impressions
+LEFT JOIN Clicks ON Impressions.eventid=Clicks.eventid;
+
+-- Output of our number of clicks and impressions and calculation of CTR per user (so disregarding the testgroup)
+SELECT Impressions.userid
+, SUM(CASE WHEN Impressions.eventid = Clicks.eventid THEN 1 ELSE 0 END) AS user_clicks_total
+, SUM(CASE WHEN userid THEN 1 ELSE 0 END) AS user_impressions_total
+, SUM(CASE WHEN Impressions.eventid = Clicks.eventid THEN 1 ELSE 0 END) 
+/ SUM(CASE WHEN userid THEN 1 ELSE 0 END) AS user_CTR_total
+FROM Impressions
+LEFT JOIN Clicks ON Impressions.eventid=Clicks.eventid
+GROUP BY userid;
+
+-- Output of our number of clicks and impressions and calculation of CTR per testgroup
+SELECT Impressions.testgroup
+, SUM(CASE WHEN Impressions.eventid = Clicks.eventid THEN 1 ELSE 0 END) AS clicks_pergroup
+, SUM(CASE WHEN userid THEN 1 ELSE 0 END) AS impressions_pergroup
+, SUM(CASE WHEN Impressions.eventid = Clicks.eventid THEN 1 ELSE 0 END) 
+/ SUM(CASE WHEN userid THEN 1 ELSE 0 END) AS CTR_pergroup
+FROM Impressions
+LEFT JOIN Clicks ON Impressions.eventid=Clicks.eventid
+GROUP BY testgroup;
+    
+-- Click-Through Rate
+
+-- The total cpc
+SELECT SUM(cpc) AS cpc_total
+FROM Clicks;
+
+-- Output of the average cpc of each user (so disregarding the testgroup)
+SELECT userid, IFNULL(SUM(cpc) / SUM(CASE WHEN Impressions.userid THEN 1 ELSE 0 END), 0) AS user_avg_cpc
+FROM Impressions 
+LEFT JOIN Clicks ON Impressions.eventid=Clicks.eventid
+GROUP BY userid;
+
+-- We calculate the average cpc per test group
+SELECT testgroup, IFNULL(SUM(Clicks.cpc) / COUNT(CASE WHEN Impressions.testgroup THEN 1 ELSE 0 END), 0) AS group_avg_cpc
+FROM Impressions
+LEFT JOIN Clicks ON Impressions.eventid=Clicks.eventid
+GROUP BY testgroup;
